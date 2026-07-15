@@ -108,6 +108,56 @@ since:2026-07-01 until:2026-07-15
 lang:pt filter:links
 ```
 
+### `get_latest_profile_posts`
+
+Recebe `username` com ou sem `@`, abre o perfil e retorna o texto acessível da timeline visível do perfil, priorizando os posts recentes.
+
+```json
+{
+  "username": "OpenAI"
+}
+```
+
+### `get_profile_info`
+
+Recebe `username` com ou sem `@` e retorna o texto acessível do perfil, incluindo nome, bio e contagens que estejam visíveis no Edge.
+
+```json
+{
+  "username": "OpenAI"
+}
+```
+
+### `search_hashtag_top`
+
+Pesquisa uma hashtag na aba de resultados relevantes (`Top`). O parâmetro pode ser informado com ou sem `#`.
+
+```json
+{
+  "hashtag": "AI"
+}
+```
+
+### `search_hashtag_latest`
+
+Pesquisa uma hashtag na aba de posts mais recentes (`Latest`).
+
+```json
+{
+  "hashtag": "AI"
+}
+```
+
+### `get_post_thread`
+
+Recebe a URL completa de um post, abre a página dele e retorna o texto acessível do post e do contexto da conversa que estiver visível.
+
+```json
+{
+  "post_url": "https://x.com/OpenAI/status/1234567890"
+}
+```
+
 ## O que a resposta contém
 
 Em caso de sucesso, `search_x` retorna:

@@ -203,7 +203,7 @@ function addressBarValue(state: unknown): string {
   return typeof addressBar?.value === "string" ? addressBar.value : "";
 }
 
-async function navigateEdgeToSearch(bridge: CuaBridge, url: string): Promise<EdgeWindow> {
+async function navigateEdgeToUrl(bridge: CuaBridge, url: string): Promise<EdgeWindow> {
   const edge = await findEdgeWindow(bridge);
   const frontResult = await bridge.callTool("bring_to_front", {
     pid: edge.pid,
@@ -242,22 +242,34 @@ async function navigateEdgeToSearch(bridge: CuaBridge, url: string): Promise<Edg
   return edge;
 }
 
-async function waitForAddressBarQuery(bridge: CuaBridge, edge: EdgeWindow, query: string): Promise<string> {
+async function waitForAddressBarUrl(
+  bridge: CuaBridge,
+  edge: EdgeWindow,
+  matches: (url: URL) => boolean,
+  description: string
+): Promise<string> {
   let lastUrl = "";
-  for (let attempt = 0; attempt < 6; attempt += 1) {
+  for (let attempt = 0; attempt < 8; attempt += 1) {
     await delay(750);
     const state = await readEdgeState(bridge, edge);
     lastUrl = addressBarValue(state);
     try {
       const parsed = new URL(lastUrl);
-      if (parsed.hostname === "x.com" && parsed.pathname === "/search" && parsed.searchParams.get("q") === query) {
-        return lastUrl;
-      }
+      if (matches(parsed)) return lastUrl;
     } catch {
       // A barra de enderecos ainda esta mudando; tenta novamente.
     }
   }
-  throw new Error(`O Edge nao confirmou a URL da consulta. URL lida: ${lastUrl || "desconhecida"}.`);
+  throw new Error(`O Edge nao confirmou ${description}. URL lida: ${lastUrl || "desconhecida"}.`);
+}
+
+async function waitForAddressBarQuery(bridge: CuaBridge, edge: EdgeWindow, query: string): Promise<string> {
+  return waitForAddressBarUrl(
+    bridge,
+    edge,
+    (url) => url.hostname === "x.com" && url.pathname === "/search" && url.searchParams.get("q") === query,
+    "a URL da consulta"
+  );
 }
 
 function timelineSection(pageText: string): string {
@@ -300,6 +312,116 @@ async function waitForCurrentSearchText(
   throw new Error(`A URL da busca foi confirmada, mas a timeline nao terminou de carregar. URL: ${currentUrl}. Inicio do texto: ${lastText.slice(0, 240)}`);
 }
 
+function normalizeUsername(value: string): string {
+  const username = value.trim().replace(/^@/, "");
+  if (!/^[A-Za-z0-9_]{1,15}$/.test(username)) {
+    throw new Error("O username precisa ter de 1 a 15 caracteres e conter apenas letras, numeros ou underscore.");
+  }
+  return username;
+}
+
+function normalizeHashtag(value: string): string {
+  const hashtag = value.trim().replace(/^#/, "");
+  if (!/^[\p{L}\p{N}_]+$/u.test(hashtag)) {
+    throw new Error("A hashtag deve conter apenas letras, numeros ou underscore.");
+  }
+  return `#${hashtag}`;
+}
+
+function isPageLoading(pageText: string): boolean {
+  return /loading (timeline|posts|replies)|carregando (a )?(timeline|posts|respostas)/i.test(pageText);
+}
+
+async function waitForProfilePage(
+  bridge: CuaBridge,
+  edge: EdgeWindow,
+  username: string
+): Promise<{ pageText: string; currentUrl: string }> {
+  const currentUrl = await waitForAddressBarUrl(
+    bridge,
+    edge,
+    (url) => url.hostname === "x.com" && (url.pathname === `/${username}` || url.pathname.startsWith(`/${username}/`)),
+    `o perfil @${username}`
+  );
+  let lastText = "";
+
+  for (let attempt = 0; attempt < 24; attempt += 1) {
+    await delay(1000);
+    const pageResult = await bridge.callTool("page", {
+      action: "get_text",
+      pid: edge.pid,
+      window_id: edge.windowId
+    });
+    throwIfToolFailed("page.get_text", pageResult);
+    lastText = contentToText(pageResult);
+    const normalized = normalizeText(lastText);
+    if (!normalized.includes(normalizeText(username)) || isPageLoading(lastText)) continue;
+    return { pageText: lastText, currentUrl };
+  }
+
+  throw new Error(`O perfil @${username} foi aberto, mas o conteúdo nao terminou de carregar. Inicio do texto: ${lastText.slice(0, 240)}`);
+}
+
+async function waitForPostPage(
+  bridge: CuaBridge,
+  edge: EdgeWindow
+): Promise<{ pageText: string; currentUrl: string }> {
+  const currentUrl = await waitForAddressBarUrl(
+    bridge,
+    edge,
+    (url) => url.hostname === "x.com" && /\/status\/\d+/.test(url.pathname),
+    "a URL do post"
+  );
+  let lastText = "";
+
+  for (let attempt = 0; attempt < 24; attempt += 1) {
+    await delay(1000);
+    const pageResult = await bridge.callTool("page", {
+      action: "get_text",
+      pid: edge.pid,
+      window_id: edge.windowId
+    });
+    throwIfToolFailed("page.get_text", pageResult);
+    lastText = contentToText(pageResult);
+    if (lastText.trim().length < 80 || isPageLoading(lastText)) continue;
+    return { pageText: lastText, currentUrl };
+  }
+
+  throw new Error(`O post foi aberto, mas o conteúdo nao terminou de carregar. URL: ${currentUrl}. Inicio do texto: ${lastText.slice(0, 240)}`);
+}
+
+function pageResponse(
+  label: string,
+  requestedUrl: string,
+  currentUrl: string,
+  edge: EdgeWindow,
+  pageText: string
+) {
+  return {
+    content: [{
+      type: "text" as const,
+      text: `${label}\nURL solicitada: ${requestedUrl}\nURL confirmada na barra do Edge: ${currentUrl}\nJanela Edge: pid=${edge.pid}, window_id=${edge.windowId}\n\nConteudo atual capturado pelo CUA page.get_text:\n${pageText.slice(0, 120_000)}`
+    }]
+  };
+}
+
+function toolError(error: unknown) {
+  return {
+    isError: true,
+    content: [{
+      type: "text" as const,
+      text: `${error instanceof Error ? error.message : String(error)}\n\nMantenha o Edge aberto no mesmo perfil autenticado no X.`
+    }]
+  };
+}
+
+async function executeSearch(query: string, live: boolean) {
+  const url = `https://x.com/search?q=${encodeURIComponent(query)}&src=typed_query${live ? "&f=live" : ""}`;
+  const edge = await navigateEdgeToUrl(bridge, url);
+  const { pageText, currentUrl } = await waitForCurrentSearchText(bridge, edge, query);
+  return pageResponse(`Consulta: ${query}`, url, currentUrl, edge, pageText);
+}
+
 const config = loadConfig();
 const bridge = new CuaBridge(config);
 const server = new McpServer({ name: "x-search-mcp", version: "0.1.0" });
@@ -333,21 +455,109 @@ server.registerTool(
     }
   },
   async ({ query, live }) => {
-    const url = `https://x.com/search?q=${encodeURIComponent(query)}&src=typed_query${live ? "&f=live" : ""}`;
     try {
-      const edge = await navigateEdgeToSearch(bridge, url);
-      const { pageText, currentUrl } = await waitForCurrentSearchText(bridge, edge, query);
-      return {
-        content: [{
-          type: "text",
-          text: `Consulta: ${query}\nURL solicitada: ${url}\nURL confirmada na barra do Edge: ${currentUrl}\nJanela Edge: pid=${edge.pid}, window_id=${edge.windowId}\n\nConteudo atual capturado pelo CUA page.get_text:\n${pageText.slice(0, 120_000)}`
-        }]
-      };
+      return await executeSearch(query, live);
     } catch (error) {
-      return {
-        isError: true,
-        content: [{ type: "text", text: `${error instanceof Error ? error.message : String(error)}\n\nMantenha o Edge aberto no mesmo perfil autenticado no X.` }]
-      };
+      return toolError(error);
+    }
+  }
+);
+
+server.registerTool(
+  "get_latest_profile_posts",
+  {
+    description: "Abre um perfil do X e retorna os posts mais recentes visiveis na timeline do perfil.",
+    inputSchema: {
+      username: z.string().min(1).describe("Username do perfil, com ou sem @")
+    }
+  },
+  async ({ username }) => {
+    try {
+      const normalizedUsername = normalizeUsername(username);
+      const url = `https://x.com/${normalizedUsername}`;
+      const edge = await navigateEdgeToUrl(bridge, url);
+      const { pageText, currentUrl } = await waitForProfilePage(bridge, edge, normalizedUsername);
+      return pageResponse(`Posts recentes de @${normalizedUsername}`, url, currentUrl, edge, pageText);
+    } catch (error) {
+      return toolError(error);
+    }
+  }
+);
+
+server.registerTool(
+  "get_profile_info",
+  {
+    description: "Abre um perfil do X e retorna o texto acessivel com nome, bio, contagens e informacoes visiveis.",
+    inputSchema: {
+      username: z.string().min(1).describe("Username do perfil, com ou sem @")
+    }
+  },
+  async ({ username }) => {
+    try {
+      const normalizedUsername = normalizeUsername(username);
+      const url = `https://x.com/${normalizedUsername}`;
+      const edge = await navigateEdgeToUrl(bridge, url);
+      const { pageText, currentUrl } = await waitForProfilePage(bridge, edge, normalizedUsername);
+      return pageResponse(`Informacoes do perfil @${normalizedUsername}`, url, currentUrl, edge, pageText);
+    } catch (error) {
+      return toolError(error);
+    }
+  }
+);
+
+server.registerTool(
+  "search_hashtag_top",
+  {
+    description: "Pesquisa uma hashtag no X e retorna os resultados mais relevantes.",
+    inputSchema: {
+      hashtag: z.string().min(1).describe("Hashtag com ou sem #")
+    }
+  },
+  async ({ hashtag }) => {
+    try {
+      return await executeSearch(normalizeHashtag(hashtag), false);
+    } catch (error) {
+      return toolError(error);
+    }
+  }
+);
+
+server.registerTool(
+  "search_hashtag_latest",
+  {
+    description: "Pesquisa uma hashtag no X e retorna os posts mais recentes.",
+    inputSchema: {
+      hashtag: z.string().min(1).describe("Hashtag com ou sem #")
+    }
+  },
+  async ({ hashtag }) => {
+    try {
+      return await executeSearch(normalizeHashtag(hashtag), true);
+    } catch (error) {
+      return toolError(error);
+    }
+  }
+);
+
+server.registerTool(
+  "get_post_thread",
+  {
+    description: "Abre um post do X e retorna o texto acessivel do post e do contexto da conversa visivel.",
+    inputSchema: {
+      post_url: z.string().url().describe("URL completa do post no X")
+    }
+  },
+  async ({ post_url }) => {
+    try {
+      const parsed = new URL(post_url);
+      if (parsed.hostname !== "x.com" || !/\/status\/\d+/.test(parsed.pathname)) {
+        throw new Error("post_url precisa ser uma URL de post do x.com, como https://x.com/usuario/status/123.");
+      }
+      const edge = await navigateEdgeToUrl(bridge, parsed.toString());
+      const { pageText, currentUrl } = await waitForPostPage(bridge, edge);
+      return pageResponse("Thread do post", parsed.toString(), currentUrl, edge, pageText);
+    } catch (error) {
+      return toolError(error);
     }
   }
 );

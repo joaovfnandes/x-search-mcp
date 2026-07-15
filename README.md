@@ -6,6 +6,11 @@ Este MCP usa o CUA Driver para controlar o Microsoft Edge e pesquisar no X.com u
 
 - `list_cua_tools`: lista as ferramentas expostas pelo CUA conectado.
 - `search_x`: abre uma busca no X e retorna o texto atual da página.
+- `get_latest_profile_posts`: retorna os posts mais recentes visíveis de um perfil.
+- `get_profile_info`: retorna o texto acessível com as informações visíveis de um perfil.
+- `search_hashtag_top`: pesquisa uma hashtag e retorna os resultados mais relevantes.
+- `search_hashtag_latest`: pesquisa uma hashtag e retorna os posts mais recentes.
+- `get_post_thread`: abre um post e retorna o contexto visível da conversa.
 
 `search_x` aceita operadores do X, por exemplo:
 
