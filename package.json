@@ -1,0 +1,23 @@
+{
+  "name": "x-search-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MCP de alto nível para pesquisar no X usando um CUA MCP conectado ao Edge.",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts",
+    "test:sequential": "node scripts/regression-sequential.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "dotenv": "^16.5.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.8.3"
+  }
+}
