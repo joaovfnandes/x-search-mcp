@@ -425,11 +425,19 @@ function pageResponse(
 
 function toolError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
-  const edgeAction = /EDGE_NOT_OPEN|EDGE_NOT_READY/.test(message)
+  const edgeUnavailable = /EDGE_NOT_OPEN|EDGE_NOT_READY/.test(message);
+  const edgeAction = edgeUnavailable
     ? "\n\nAcao necessaria: abra o Microsoft Edge no mesmo perfil autenticado no X e repita a solicitacao."
     : "\n\nMantenha o Edge aberto no mesmo perfil autenticado no X.";
   return {
-    isError: true,
+    ...(edgeUnavailable ? {} : { isError: true }),
+    ...(edgeUnavailable ? {
+      structuredContent: {
+        status: "edge_unavailable",
+        code: message.match(/^(EDGE_[A-Z_]+)/)?.[1] ?? "EDGE_UNAVAILABLE",
+        retryable: true
+      }
+    } : {}),
     content: [{
       type: "text" as const,
       text: `${message}${edgeAction}`
