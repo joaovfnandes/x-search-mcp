@@ -273,7 +273,7 @@ async function waitForAddressBarQuery(bridge: CuaBridge, edge: EdgeWindow, query
 }
 
 function timelineSection(pageText: string): string {
-  const marker = pageText.match(/search timeline|linha do tempo da pesquisa|timeline de busca/i);
+  const marker = pageText.match(/search timeline|buscar timeline|linha do tempo da pesquisa|linha do tempo de busca|timeline de busca/i);
   return marker?.index === undefined ? "" : pageText.slice(marker.index + marker[0].length);
 }
 
