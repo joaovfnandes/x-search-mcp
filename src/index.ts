@@ -140,15 +140,28 @@ async function findEdgeWindow(bridge: CuaBridge): Promise<EdgeWindow> {
   const structured = structuredContent(result);
   const rawWindows = structured.windows ?? structured._legacy_windows;
   const windows = Array.isArray(rawWindows) ? rawWindows : [];
-  const edge = windows.find((item) => {
+  const edgeCandidates = windows.filter((item) => {
     if (!item || typeof item !== "object") return false;
     const window = item as Record<string, unknown>;
     const identity = `${window.app_name ?? ""} ${window.title ?? ""}`;
-    return /edge|msedge/i.test(identity) && window.pid && window.window_id;
-  }) as Record<string, unknown> | undefined;
+    const title = String(window.title ?? "");
+    return /edge|msedge/i.test(identity)
+      && !/restore pages|restaurar paginas|restaurar páginas/i.test(title)
+      && window.is_on_screen !== false
+      && window.minimized !== true
+      && window.pid
+      && window.window_id;
+  }) as Array<Record<string, unknown>>;
+  const edge = edgeCandidates.sort((left, right) => {
+    const leftBounds = left.bounds as Record<string, unknown> | undefined;
+    const rightBounds = right.bounds as Record<string, unknown> | undefined;
+    const leftArea = Number(leftBounds?.width ?? 0) * Number(leftBounds?.height ?? 0);
+    const rightArea = Number(rightBounds?.width ?? 0) * Number(rightBounds?.height ?? 0);
+    return rightArea - leftArea;
+  })[0];
 
   if (!edge) {
-    throw new Error("Nao encontrei uma janela do Microsoft Edge. Abra o Edge e tente novamente.");
+    throw new Error("EDGE_NOT_OPEN: nao encontrei uma janela visivel do Microsoft Edge. Abra o Edge no mesmo perfil autenticado no X e tente novamente.");
   }
 
   return { pid: Number(edge.pid), windowId: Number(edge.window_id) };
@@ -260,7 +273,10 @@ async function waitForAddressBarUrl(
       // A barra de enderecos ainda esta mudando; tenta novamente.
     }
   }
-  throw new Error(`O Edge nao confirmou ${description}. URL lida: ${lastUrl || "desconhecida"}.`);
+  if (!lastUrl) {
+    throw new Error(`EDGE_NOT_READY: o Edge foi localizado, mas a barra de enderecos ainda nao esta disponivel para ${description}. Confirme que a janela esta aberta e tente novamente.`);
+  }
+  throw new Error(`EDGE_NOT_READY: o Edge nao confirmou ${description}. URL lida: ${lastUrl}. Confirme que a janela esta aberta e tente novamente.`);
 }
 
 async function waitForAddressBarQuery(bridge: CuaBridge, edge: EdgeWindow, query: string): Promise<string> {
@@ -408,11 +424,15 @@ function pageResponse(
 }
 
 function toolError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  const edgeAction = /EDGE_NOT_OPEN|EDGE_NOT_READY/.test(message)
+    ? "\n\nAcao necessaria: abra o Microsoft Edge no mesmo perfil autenticado no X e repita a solicitacao."
+    : "\n\nMantenha o Edge aberto no mesmo perfil autenticado no X.";
   return {
     isError: true,
     content: [{
       type: "text" as const,
-      text: `${error instanceof Error ? error.message : String(error)}\n\nMantenha o Edge aberto no mesmo perfil autenticado no X.`
+      text: `${message}${edgeAction}`
     }]
   };
 }
