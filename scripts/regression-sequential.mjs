@@ -25,7 +25,7 @@ const queries = [
   "from:OpenAI (model OR models)"
 ];
 
-const client = new Client({ name: "x-search-sequential-regression", version: "1.5.0" });
+const client = new Client({ name: "x-search-sequential-regression", version: "2.0.0" });
 await client.connect(transport);
 
 try {

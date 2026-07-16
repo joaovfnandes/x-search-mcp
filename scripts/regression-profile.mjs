@@ -17,7 +17,7 @@ const transport = new StdioClientTransport({
   stderr: "inherit"
 });
 
-const client = new Client({ name: "x-search-profile-regression", version: "1.5.0" });
+const client = new Client({ name: "x-search-profile-regression", version: "2.0.0" });
 await client.connect(transport);
 
 try {

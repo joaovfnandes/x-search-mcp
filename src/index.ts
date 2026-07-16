@@ -86,7 +86,7 @@ class CuaBridge {
   async connect(): Promise<Client> {
     if (this.client) return this.client;
 
-    const client = new Client({ name: "x-search-mcp", version: "1.5.0" });
+    const client = new Client({ name: "x-search-mcp", version: "2.0.0" });
     if (this.config.transport === "stdio") {
       this.transport = new StdioClientTransport({
         command: this.config.command!,
@@ -454,7 +454,7 @@ async function executeSearch(query: string, live: boolean) {
 
 const config = loadConfig();
 const bridge = new CuaBridge(config);
-const server = new McpServer({ name: "x-search-mcp", version: "1.5.0" });
+const server = new McpServer({ name: "x-search-mcp", version: "2.0.0" });
 
 server.registerTool(
   "list_cua_tools",
