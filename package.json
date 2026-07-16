@@ -8,6 +8,7 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
+    "test:profile": "node scripts/regression-profile.mjs",
     "test:sequential": "node scripts/regression-sequential.mjs"
   },
   "dependencies": {

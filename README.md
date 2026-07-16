@@ -60,7 +60,13 @@ Com o Edge aberto e autenticado no X:
 npm run test:sequential
 ```
 
-O teste executa três pesquisas consecutivas na mesma sessão e falha se alguma resposta contiver conteúdo defasado.
+O teste executa quatro pesquisas consecutivas e uma leitura de perfil na mesma sessão. Ele falha se alguma resposta contiver conteúdo defasado ou se a timeline do perfil ainda estiver carregando.
+
+Para testar somente a timeline de um perfil:
+
+```powershell
+npm run test:profile
+```
 
 ## Requisitos e limites
 

@@ -278,7 +278,7 @@ function timelineSection(pageText: string): string {
 }
 
 function isFinishedTimeline(pageText: string): boolean {
-  if (/loading timeline|carregando (a )?(timeline|linha do tempo)/i.test(pageText)) return false;
+  if (isPageLoading(pageText)) return false;
   const timeline = timelineSection(pageText);
   if (!timeline) return false;
   const hasPost = /(^|\n)@[A-Za-z0-9_]{1,15}\b/m.test(timeline);
@@ -329,7 +329,9 @@ function normalizeHashtag(value: string): string {
 }
 
 function isPageLoading(pageText: string): boolean {
-  return /loading (timeline|posts|replies)|carregando (a )?(timeline|posts|respostas)/i.test(pageText);
+  return pageText.split(/\r?\n/).some((line) =>
+    /^(?:loading\b|carregando\b)/i.test(line.trim())
+  );
 }
 
 async function waitForProfilePage(

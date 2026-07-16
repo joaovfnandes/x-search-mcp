@@ -48,6 +48,26 @@ try {
     }
     console.log(`PASS ${query}`);
   }
+
+  const profileResult = await client.callTool({
+    name: "get_latest_profile_posts",
+    arguments: { username: "OpenAI" }
+  });
+  const profileOutput = (profileResult.content ?? [])
+    .filter((item) => item.type === "text")
+    .map((item) => item.text)
+    .join("\n");
+  if (profileResult.isError) throw new Error(`get_latest_profile_posts: ${profileOutput}`);
+  const profileMarker = "Conteudo atual capturado pelo CUA page.get_text:";
+  const profileCaptured = profileOutput.slice(profileOutput.indexOf(profileMarker) + profileMarker.length);
+  if (/\bloading\b/i.test(profileCaptured)) {
+    throw new Error("get_latest_profile_posts: o perfil ainda esta carregando quando a ferramenta respondeu.");
+  }
+  const profileAuthorCount = (profileCaptured.match(/@OpenAI\b/g) ?? []).length;
+  if (profileAuthorCount < 2 || !/\b\d+[hm]\b/m.test(profileCaptured) || profileCaptured.length < 800) {
+    throw new Error("get_latest_profile_posts: a resposta nao contem a timeline carregada do perfil.");
+  }
+  console.log("PASS get_latest_profile_posts");
 } finally {
   await client.close();
 }

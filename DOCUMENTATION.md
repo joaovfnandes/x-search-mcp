@@ -195,6 +195,14 @@ O teste executa buscas consecutivas na mesma sessão e verifica que:
 - a resposta não está presa em `Loading timeline`;
 - há posts ou um estado final indicando que não existem resultados.
 
+Existe também um teste focado na timeline de perfil:
+
+```powershell
+npm run test:profile
+```
+
+Esse teste garante que `get_latest_profile_posts` não responda enquanto o Edge ainda exibe um estado `Loading` ou `Loading posts by ...`.
+
 ## Limitações conhecidas
 
 - O resultado depende do carregamento da interface do X e da árvore de acessibilidade do Edge.
